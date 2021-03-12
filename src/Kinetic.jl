@@ -1,0 +1,3 @@
+module Kinetic
+
+end # module
