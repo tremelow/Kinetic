@@ -50,7 +50,7 @@ function save_mesh(g::CartesianGrid, filename::AbstractString; format="Compact")
     nothing
 end
 
-function save_mesh(m::Unstructuredmesh, filename::AbstractString; format="GMSH")
+function save_mesh(m::UnstructuredMesh, filename::AbstractString; format="GMSH")
     if format != "GMSH"
         print("Mesh was not saved: Format not supported")
     elseif !check_file(filename)

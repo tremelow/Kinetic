@@ -1,9 +1,9 @@
 ```@meta
 DocTestSetup  = quote
-    using Kinetic
+    using StiffKinetic
 end
 ```
-# Kinetic
+# StiffKinetic
 
 *Documentation goes here.*
 

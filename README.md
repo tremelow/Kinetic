@@ -19,13 +19,18 @@ A Julia library to provide a structure and high-performance numerical
 tools for the simulation of kinetic problems with stiff collisions. This
 is my first library ever, so it won't be world changing!
 
+This will eventually be implemented in context of simulations using the 
+[DrWatson library](https://juliadynamics.github.io/DrWatson.jl/dev/).
+
+## Mathematical context
+
 As a preliminary to treating the Boltzmann equation, we consider
 hyperbolic problems of the form
 
 <p align="center">$$
 \begin{cases}
-    \partial_t u + \partial_x v = 0 \\ \displaystyle
-    \partial_t v + \frac{1}{\varepsilon^{2\alpha}} \partial_x p(u) ,
+    \partial_t u + \partial_x v = 0 , \\ \displaystyle
+    \partial_t v + \frac{1}{\varepsilon^{2\alpha}} \partial_x p(u)
     = -\frac{1}{\varepsilon^{1+\alpha}} \left( v - f(u) \right) .
 \end{cases}
 $$</p>
@@ -52,7 +57,3 @@ j](https://latex.codecogs.com/svg.latex?%5Cinline%5Cvarepsilon%20j%20%3D%20f%281
 $$</p>
 
 which fits with the first hyperbolic problem.
-
-
-This will eventually be implemented in context of simulations using the 
-[DrWatson library](https://juliadynamics.github.io/DrWatson.jl/dev/).

@@ -1,2 +1,2 @@
-using Kinetic
+using StiffKinetic
 using Test
