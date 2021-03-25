@@ -19,7 +19,10 @@ A Julia library to provide a structure and high-performance numerical
 tools for the simulation of kinetic problems with stiff collisions. This
 is my first library ever, so it won't be world changing!
 
-This will eventually be implemented in context of simulations using the 
+List of features to add:
+* boundary conditions
+* IMEX schemes
+* implement in context of simulations using the 
 [DrWatson library](https://juliadynamics.github.io/DrWatson.jl/dev/).
 
 ## Mathematical context

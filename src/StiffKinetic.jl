@@ -1,5 +1,5 @@
 module StiffKinetic
-    using Meshes
+    using Revise
 
     include("mesh.jl")
     include("problems.jl")
