@@ -4,19 +4,38 @@ using OffsetArrays
 using Plots
 using StiffKinetic
 
-function advection!(dU, flux, U, dx)
-    negWENO3!(flux, -U)
-    flux[end] = flux[end-1]
-    
-    @. dU = (flux[1:end] - flux[0:end-1])/dx
-end
 
-function RK4(dU, flux, U, dx, dt)
-    k1 = -advection!(dU, flux, U, dx)
-    k2 = -advection!(dU, flux, U + 0.5*dt*k1, dx)
-    k3 = -advection!(dU, flux, U + 0.5*dt*k2, dx)
-    k4 = -advection!(dU, flux, U + dt*k3, dx)
-    U + dt/6.0 * (k1 + 2.0*k2 + 2.0*k3 + k4)
+"""
+Consider the system
+    ∂ₜu + ∂ₓv = 0
+    ∂ₜv = -(v + ∂ₓu)/ε²
+"""
+
+struct RelaxPb
+    U :: Vector
+    V :: Vector
+
+    posFluxU :: OffsetVector
+    negFluxU :: OffsetVector
+    posFluxV :: OffsetVector
+    negFluxV :: OffsetVector
+
+    dU :: Vector
+    dV :: Vector
+
+    function RelaxPb(U,V)
+        Nx = length(U)
+        @assert Nx == length(V)
+
+        posFluxU = OffsetVector(zeros(Nx+1), 0:Nx)
+        negFluxU = OffsetVector(zeros(Nx+1), 0:Nx)
+        posFluxV = OffsetVector(zeros(Nx+1), 0:Nx)
+        negFluxV = OffsetVector(zeros(Nx+1), 0:Nx)
+
+        dU, dV = zero(U), zero(V)
+
+        new(copy(U),copy(V),posFluxU,negFluxU,posFluxV,negFluxV,dU,dV)
+    end
 end
 
 Nx = 2^7 + 1
@@ -24,12 +43,20 @@ x  = range(0.0, 1.0, length=Nx)
 dx = step(x)
 
 U = Float64.(0.25 .<= x .<= 0.75)
-dU = zero(U)
-flux = OffsetVector(zeros(Nx+1), 0:Nx)
+V = Float64.(0.25 .<= x .<= 0.75)
+pb = RelaxPb(U,V)
+
+function imex_bdf1_du(pb :: RelaxPb, dt, dx, ε)
+    Θ = 1/(ε^2 + dt)
+    ∂ₓu = 
+    dV .= -dt/(ε^2 + dt) * ( V + ∂ₓu )
+
+    dU = dt / (ε^2 + dt) * ∂ₓV # with new V
+end
 
 T = 1.0
 dt = 2^-9
-dt_anim = 2^-5
+dt_anim = 2^-6
 nt_anim = Int(T/dt_anim)
 
 nt_pf = Int(dt_anim/dt)
@@ -37,7 +64,7 @@ nt_pf = Int(dt_anim/dt)
 anim = @animate for t in 0 : dt_anim : T
     plot(x, U, title = "t = $t", ylims=(-0.1, 1.1))
     for _ in 1 : nt_pf
-        U .= RK4(dU, flux, U, dx, dt)
+        U .= imex_bdf1_du(dU, dV, fluxU, fluxV, U, V, dt, dx, ε)
     end
 end
 
