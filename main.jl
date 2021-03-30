@@ -17,8 +17,12 @@ struct RelaxPb
 
     posFluxU :: OffsetVector
     negFluxU :: OffsetVector
+    rosFluxU :: OffsetVector
     posFluxV :: OffsetVector
     negFluxV :: OffsetVector
+    rosFluxV :: OffsetVector
+
+    dx2_U :: OffsetVector
 
     dU :: Vector
     dV :: Vector
@@ -29,12 +33,17 @@ struct RelaxPb
 
         posFluxU = OffsetVector(zeros(Nx+1), 0:Nx)
         negFluxU = OffsetVector(zeros(Nx+1), 0:Nx)
+        rosFluxU = OffsetVector(zeros(Nx+1), 0:Nx)
         posFluxV = OffsetVector(zeros(Nx+1), 0:Nx)
         negFluxV = OffsetVector(zeros(Nx+1), 0:Nx)
+        rosFluxV = OffsetVector(zeros(Nx+1), 0:Nx)
+
+        dx2_U = zero(U)
 
         dU, dV = zero(U), zero(V)
 
-        new(copy(U),copy(V),posFluxU,negFluxU,posFluxV,negFluxV,dU,dV)
+        new(copy(U),copy(V),posFluxU,negFluxU,rosFluxU,
+            posFluxV,negFluxV,rosFluxU,dx2_U,dU,dV)
     end
 end
 
@@ -47,8 +56,19 @@ V = Float64.(0.25 .<= x .<= 0.75)
 pb = RelaxPb(U,V)
 
 function imex_bdf1_du(pb :: RelaxPb, dt, dx, ε)
-    Θ = 1/(ε^2 + dt)
-    ∂ₓu = 
+    posWENO5!(pb.posFluxU, U)
+    posWENO5!(pb.posFluxV, V)
+    negWENO5!(pb.negFluxU, U)
+    negWENO5!(pb.negFluxV, V)
+
+
+
+    local Θ = 1/(ε^2 + dt)
+    local dx⁻¹ = 1.0 / dx
+    local ∂ₓu = 0.5 * dx⁻¹ * (pb.posFluxU + pb.negFluxU 
+                                - Θ * (pb.posFluxV - pb.negFluxV))
+    local ∂ₓv = 0.5 * dx⁻¹ * (pb.posFluxV + pb.negFluxV 
+                                - Θ * (pb.posFluxU - pb.negFluxU))
     dV .= -dt/(ε^2 + dt) * ( V + ∂ₓu )
 
     dU = dt / (ε^2 + dt) * ∂ₓV # with new V
