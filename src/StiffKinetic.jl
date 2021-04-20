@@ -11,4 +11,6 @@ module StiffKinetic
     export negUpwind!, negWENO3!, negWENO5!
     export posUpwind, posWENO3, posWENO5
     export negUpwind, negWENO3, negWENO5
+    export fd_diff2_ord2!, fd_diff2_ord4!, fd_diff2_ord6!
+    
 end # module
