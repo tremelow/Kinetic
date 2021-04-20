@@ -11,64 +11,80 @@ Consider the system
     ∂ₜv = -(v + ∂ₓu)/ε²
 """
 
-struct RelaxPb
-    U :: Vector
-    V :: Vector
+struct ScalarQuantity
+    data :: Vector
+    posFlux :: OffsetVector
+    negFlux :: OffsetVector
 
-    posFluxU :: OffsetVector
-    negFluxU :: OffsetVector
+    function ScalarQuantity(U)
+        Nx = length(U)
+        posFlux = OffsetVector(zeros(Nx+1), 0:Nx)
+        negFlux = OffsetVector(zeros(Nx+1), 0:Nx)
+
+        new(copy(U), posFlux, negFlux)
+    end
+end
+
+function compute_flux!(U :: ScalarQuantity, uL, uR)
+    posWENO5!(U.posFlux, U.data)
+    negWENO5!(U.negFlux, U.data)
+    U.posFlux[0], U.negFlux[end] = uL, uR
+end
+
+struct DoubleQuantity
+    U :: ScalarQuantity
+    V :: ScalarQuantity
     rosFluxU :: OffsetVector
-    posFluxV :: OffsetVector
-    negFluxV :: OffsetVector
     rosFluxV :: OffsetVector
 
-    dxU :: Vector
-    dxV :: Vector
+    function DoubleQuantity(U,V)
+        Nx = length(U)
+        @assert Nx == length(V)
+        rosFluxU = OffsetVector(zeros(Nx+1), 0:Nx)
+        rosFluxV = OffsetVector(zeros(Nx+1), 0:Nx)
 
-    posFluxDxU :: OffsetVector
-    negFluxDxU :: OffsetVector
-    rosFluxDxU :: OffsetVector
-    posFluxDxV :: OffsetVector
-    negFluxDxV :: OffsetVector
-    rosFluxDxV :: OffsetVector
+        new(ScalarQuantity(U), ScalarQuantity(V), rosFluxU, rosFluxV)
+    end
+end
 
-    dx2_U :: Vector
+function compute_ros_flux!(uv :: DoubleQuantity, uL, uR, vL, vR, Θ)
+    compute_flux!(uv.U, uL, uR)
+    compute_flux!(uv.V, vL, vR)
+    @. uv.rosFluxU = 0.5 * (uv.U.posFlux + uv.U.negFlux +
+                            -Θ * (uv.V.posFlux - uv.V.negFlux) )
+    @. uv.rosFluxV = 0.5 * (uv.V.posFlux + uv.V.negFlux +
+                            -Θ * (uv.U.posFlux - uv.U.negFlux) )
+end
+
+
+function assign_dx!(dx_uv, uv, uL, uR, vL, vR, rosΘ, dx⁻¹)
+    compute_ros_flux!(uv, uL, uR, vL, vR, rosΘ)
+    dx_uv.U.data .= dx⁻¹ * diff(pb.uv.rosFluxU.parent)
+    dx_uv.V.data .= dx⁻¹ * diff(pb.uv.rosFluxV.parent)
+end
+
+
+
+struct RelaxPb
+    uv :: DoubleQuantity
+    dx_uv :: DoubleQuantity
+    dx2_uv :: DoubleQuantity
 
     dU :: Vector
     dV :: Vector
 
     function RelaxPb(U,V)
-        Nx = length(U)
-        @assert Nx == length(V)
-
-        posFluxU = OffsetVector(zeros(Nx+1), 0:Nx)
-        negFluxU = OffsetVector(zeros(Nx+1), 0:Nx)
-        rosFluxU = OffsetVector(zeros(Nx+1), 0:Nx)
-        posFluxV = OffsetVector(zeros(Nx+1), 0:Nx)
-        negFluxV = OffsetVector(zeros(Nx+1), 0:Nx)
-        rosFluxV = OffsetVector(zeros(Nx+1), 0:Nx)
-
-        posFluxDxU = OffsetVector(zeros(Nx+1), 0:Nx)
-        negFluxDxU = OffsetVector(zeros(Nx+1), 0:Nx)
-        rosFluxDxU = OffsetVector(zeros(Nx+1), 0:Nx)
-        posFluxDxV = OffsetVector(zeros(Nx+1), 0:Nx)
-        negFluxDxV = OffsetVector(zeros(Nx+1), 0:Nx)
-        rosFluxDxV = OffsetVector(zeros(Nx+1), 0:Nx)
-
+        dx_U, dx_V = zero(U), zero(V)
+        dx2_U, dx2_V = zero(U), zero(V)
         dU, dV = zero(U), zero(V)
-        dxU, dxV = zero(U), zero(V)
-        dx2_U = zero(U)
 
-
-        new(copy(U),copy(V),
-            posFluxU,negFluxU,rosFluxU,
-            posFluxV,negFluxV,rosFluxU,
-            dxU,dxV,
-            posFluxDxU,negFluxDxU,rosFluxDxU,
-            posFluxDxV,negFluxDxV,rosFluxDxU,
-            dx2_U,dU,dV)
+        new(DoubleQuantity(U, V), DoubleQuantity(dx_U, dx_V),
+            DoubleQuantity(dx2_U, dx2_V), dU, dV)
     end
 end
+
+
+
 
 Nx = 2^10 + 1
 x  = range(0.0, 4.0, length=Nx)
@@ -81,45 +97,20 @@ U = uL*Float64.(0.0 .<= x .<= 2.0) + uR*Float64.(2.0 .< x .<= 4.0)
 V = vL*Float64.(0.0 .<= x .<= 2.0) + vR*Float64.(2.0 .< x .<= 4.0)
 pb = RelaxPb(U,V)
 
-ε = 2^-20
+ε = 2^-1
 
 function imex_bdf1_du!(pb :: RelaxPb, dt, dx, ε)
-    posUpwind!(pb.posFluxU, pb.U)
-    posUpwind!(pb.posFluxV, pb.V)
-    negUpwind!(pb.negFluxU, pb.U)
-    negUpwind!(pb.negFluxV, pb.V)
-    pb.posFluxU[0], pb.negFluxU[end] = uL, uR
-    pb.posFluxV[0], pb.negFluxV[end] = vL, vR
-
-    
-    local Θ = 1/(ε^2 + dt)
-    local rosΘ = 0.0
-    @. pb.rosFluxU = pb.posFluxU + pb.negFluxU +
-                    -rosΘ * (pb.posFluxV - pb.negFluxV)
-    @. pb.rosFluxV = pb.posFluxV + pb.negFluxV +
-                    -rosΘ * (pb.posFluxU - pb.negFluxU)
-
+    local Θ = 1.0 / (ε^2 + dt)
     local dx⁻¹ = 1.0 / dx
-    pb.dxU .= 0.5 * dx⁻¹ * diff(pb.rosFluxU.parent)
-    pb.dxV .= 0.5 * dx⁻¹ * diff(pb.rosFluxV.parent)
 
-
-    posUpwind!(pb.posFluxDxU, pb.dxU)
-    posUpwind!(pb.posFluxDxV, pb.dxV)
-    negUpwind!(pb.negFluxDxU, pb.dxU)
-    negUpwind!(pb.negFluxDxV, pb.dxV)
-    pb.posFluxDxU[0], pb.negFluxDxU[end] = 0.0, 0.0
-    pb.posFluxDxV[0], pb.negFluxDxV[end] = 0.0, 0.0
-
-    @. pb.rosFluxDxU = pb.posFluxDxU + pb.negFluxDxU +
-                    -rosΘ * (pb.posFluxDxV - pb.negFluxDxV)
-
-    pb.dx2_U .= 0.5 * dx⁻¹ * diff(pb.rosFluxDxU.parent)
+    local rosΘ = 0.0
+    assign_dx!(pb.dx_uv, pb.uv, uL, uR, vL, vR, rosΘ, dx⁻¹)
+    assign_dx!(pb.dx2_uv, pb.dx_uv, 0, 0, 0, 0, rosΘ, dx⁻¹)
 
     # fd_diff2_ord6!(pb.dx2_U, U, dx⁻¹)
 
-    @. pb.dU =  dt * Θ * (ε^2 * pb.dxV + dt * pb.dx2_U)
-    @. pb.dV = -dt * Θ * ( pb.V + pb.dxU )
+    @. pb.dU =  dt * Θ * (ε^2 * pb.dx_uv.V.data + dt * pb.dx2_uv.U.data)
+    @. pb.dV = -dt * Θ * ( pb.uv.V.data + pb.dx_uv.U.data )
 
     pb.dU[1], pb.dU[end] = 0.0, 0.0
     pb.dV[1], pb.dV[end] = 0.0, 0.0
@@ -138,11 +129,11 @@ nt_anim = Int(T/dt_anim)
 nt_pf = Int(dt_anim/dt)
 
 anim = @animate for t in 0 : dt_anim : T
-    plot(x, pb.U, title = "t = $t", ylims=(1.5, 5.5))
+    plot(x, pb.uv.U.data, title = "t = $t", ylims=(1.5, 5.5))
     for _ in 1 : nt_pf
         imex_bdf1_du!(pb, dt, dx, ε)
-        @. pb.U += pb.dU
-        @. pb.V += pb.dV
+        @. pb.uv.U.data += pb.dU
+        @. pb.uv.V.data += pb.dV
     end
 end
 
