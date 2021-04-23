@@ -26,8 +26,8 @@ struct ScalarQuantity
 end
 
 function compute_flux!(U :: ScalarQuantity, uL, uR)
-    posWENO5!(U.posFlux, U.data)
-    negWENO5!(U.negFlux, U.data)
+    posWENO3!(U.posFlux, U.data)
+    negWENO3!(U.negFlux, U.data)
     U.posFlux[0], U.negFlux[end] = uL, uR
 end
 
@@ -107,10 +107,10 @@ function imex_bdf1_du!(pb :: RelaxPb, dt, dx, ε)
     assign_dx!(pb.dx_uv, pb.uv, uL, uR, vL, vR, rosΘ, dx⁻¹)
     assign_dx!(pb.dx2_uv, pb.dx_uv, 0, 0, 0, 0, rosΘ, dx⁻¹)
 
-    # fd_diff2_ord6!(pb.dx2_U, U, dx⁻¹)
+    # fd_diff2_ord6!(pb.dx2_uv.U.data, pb.uv.U.data, dx⁻¹)
 
     @. pb.dU =  dt * Θ * (ε^2 * pb.dx_uv.V.data + dt * pb.dx2_uv.U.data)
-    @. pb.dV = -dt * Θ * ( pb.uv.V.data + pb.dx_uv.U.data )
+    @. pb.dV = -dt * Θ * ( pb.uv.V.data - pb.dx_uv.U.data )
 
     pb.dU[1], pb.dU[end] = 0.0, 0.0
     pb.dV[1], pb.dV[end] = 0.0, 0.0
@@ -119,7 +119,7 @@ function imex_bdf1_du!(pb :: RelaxPb, dt, dx, ε)
 end
 
 T = 0.25
-dt = (2^-5) * dx^2
+dt = (2^-3) * dx^2
 
 imex_bdf1_du!(pb, dt, dx, ε)
 
@@ -129,7 +129,8 @@ nt_anim = Int(T/dt_anim)
 nt_pf = Int(dt_anim/dt)
 
 anim = @animate for t in 0 : dt_anim : T
-    plot(x, pb.uv.U.data, title = "t = $t", ylims=(1.5, 5.5))
+    plot(x, pb.uv.U.data, title = "t = $t", ylims=(-3.0, 5.5))
+    plot!(x, pb.uv.V.data, title = "t = $t", ylims=(-3.0, 5.5))
     for _ in 1 : nt_pf
         imex_bdf1_du!(pb, dt, dx, ε)
         @. pb.uv.U.data += pb.dU
