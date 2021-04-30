@@ -1,27 +1,43 @@
-# @doc raw"""
-#     HyperbolicProblem(ε,p,f)
+using OffsetArrays
 
-# Defines a structure to represent the problem 
-# ```math
-# \begin{cases}
-#     ∂ₜ u + ∂ₓ v = 0 , \\
-#     ∂ₜ v + \frac{1}{ε^{2α}} ∂ₓ p(u) = -\frac{1}{ε^{1+α}} ( v - f(u) ) .
-# \end{cases}
-# ```
-# """
-struct HyperbolicProblem{εT <: AbstractFloat}
-    ε :: εT
-    p :: Function
+
+Flux = OffsetVector
+zero_flux(Nx :: Int) = Flux(zeros(Nx+1), 0 : Nx)
+zero_flux(U :: Vector) = Flux(zeros(length(U)+1), 0 : length(U))
+
+struct ScalarQuantity
+    data :: Vector
+    posFlux :: Flux
+    negFlux :: Flux
+
+    ScalarQuantity(U :: Vector) = new(copy(U), zero_flux(U), zero_flux(U))
+end
+
+
+struct RelaxPb
+    U :: ScalarQuantity
+    V :: ScalarQuantity
+
+    fluxP :: Flux
+    fluxV :: Flux
+    dxP :: Vector
+    dxV :: Vector
+
     f :: Function
-    
-    function HyperbolicProblem(ε :: εT, p :: Function, 
-                               f :: Function) where εT <: AbstractFloat
-        new{εT}(ε, p, f)
-    end
+    p :: Function
 
-    HyperbolicProblem() = new{Float64}(1.0, u -> u, u -> 0.0)
+    function RelaxPb(U :: Vector, V :: Vector,
+                     f :: Function, p :: Function)
 
-    function HyperbolicProblem(ε :: εT) where εT <: AbstractFloat
-        new{εT}(ε, u -> u, u -> 0.0)
+        Nx = length(U)
+        pbU, pbV = ScalarQuantity(U), ScalarQuantity(V)
+        fluxV, fluxP = zero_flux(Nx), zero_flux(Nx)
+        dxV, dxP = zeros(Nx), zeros(Nx)
+
+        new(pbU,pbV,fluxP,fluxV,dxV,dxP,f,p)
     end
+end
+
+function Base.copy(pb :: RelaxPb)
+    RelaxPb(pb.U.data,pb.V.data,pb.f,pb.p)
 end
